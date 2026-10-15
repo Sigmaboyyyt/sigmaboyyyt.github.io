@@ -543,6 +543,9 @@ body::after {
 .card-desc { color: var(--muted); font-size: 14.5px; line-height: 1.55; flex: 1; }
 .card-price { font-size: 26px; font-weight: 800; margin: 16px 0 14px; }
 .card-price small { font-size: 13px; color: var(--muted); font-weight: 600; }
+/* Цена и кнопка прижаты к низу — кнопки «В корзину» на одном уровне */
+.card > .card-price,
+.card > .btn { margin-top: auto; }
 .card-link-go {
     display: inline-flex; align-items: center; gap: 6px; margin-top: 16px;
     font-weight: 700; color: var(--a2); font-size: 14.5px;
