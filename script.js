@@ -15,7 +15,7 @@
     var DEFAULT_API = 'http://127.0.0.1:9898/give';
     var REMOTE_API = 'https://nenlymine.vffgeg4.workers.dev/give';
 
-    var CASE_KINDS = { case: 1, seasoncase: 1, weeklycase: 1, titlecase: 1 };
+    var CASE_KINDS = { case: 1, seasoncase: 1, weeklycase: 1, titlecase: 1, moneycase: 1 };
 
     var GROUP_NAMES = {
         premium: 'Премиум', creative: 'Креатив', straj: 'Страж',
@@ -27,7 +27,7 @@
 
     var CASE_NAMES = {
         case: 'Кейс', seasoncase: 'Сезонный кейс',
-        weeklycase: 'Недельный кейс', titlecase: 'Титульный кейс'
+        weeklycase: 'Недельный кейс', titlecase: 'Титульный кейс', moneycase: 'Денежный кейс'
     };
 
     function $(sel, root) { return (root || document).querySelector(sel); }

@@ -25,7 +25,7 @@ const SERVER = "57a7571b";
 const GROUPS = ["premium", "creative", "straj", "lord", "delux", "tsar",
   "imperator", "legenda", "povelitel", "vlastelin", "vladika"];
 
-const KINDS = ["group", "case", "seasoncase", "weeklycase", "titlecase", "tag", "mute", "unban"];
+const KINDS = ["group", "case", "seasoncase", "weeklycase", "titlecase", "moneycase", "tag", "mute", "unban"];
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -65,6 +65,7 @@ function buildCommand(kind, nick, amount, group) {
   if (kind === "seasoncase") return "giveseasoncase " + nick + " " + amount;
   if (kind === "weeklycase") return "giveweeklycase " + nick + " " + amount;
   if (kind === "titlecase") return "givetitlecase " + nick + " " + amount;
+  if (kind === "moneycase") return "givemoneycase " + nick + " " + amount;
   throw new Error("Неизвестный тип: " + kind);
 }
 

@@ -23,7 +23,8 @@ KINDS = {
     "case":       ("givecase",      False, True),
     "seasoncase": ("giveseasoncase", False, True),
     "weeklycase": ("giveweeklycase", False, True),
-    "titlecase":  ("givetitlecase", False, True),
+    "titlecase":  ("givetitlecase",  False, True),
+    "moneycase":  ("givemoneycase",  False, True),
     "tag":        ("tag allow",     False, False),
     "mute":       ("mute",          False, False),
     "unban":      ("unban",         False, False),
@@ -106,6 +107,7 @@ button:disabled{opacity:.5;cursor:wait}
   <option value="seasoncase">Сезонный кейс (giveseasoncase)</option>
   <option value="weeklycase">Недельный кейс (giveweeklycase)</option>
   <option value="titlecase">Титульный кейс (givetitlecase)</option>
+  <option value="moneycase">Денежный кейс (givemoneycase)</option>
   <option value="tag">Тег (tag allow)</option>
 </select>
 
@@ -135,7 +137,7 @@ button:disabled{opacity:.5;cursor:wait}
 <script>
 var KINDS={group:["setgroup",true,false],case:["givecase",false,true],
 seasoncase:["giveseasoncase",false,true],weeklycase:["giveweeklycase",false,true],
-titlecase:["givetitlecase",false,true],tag:["tag allow",false,false]};
+titlecase:["givetitlecase",false,true],moneycase:["givemoneycase",false,true],tag:["tag allow",false,false]};
 function $(id){return document.getElementById(id)}
 function refresh(){
  var k=$("kind").value;
@@ -274,6 +276,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return "giveweeklycase %s %d" % (nick, int(amount))
         if kind == "titlecase":
             return "givetitlecase %s %d" % (nick, int(amount))
+        if kind == "moneycase":
+            return "givemoneycase %s %d" % (nick, int(amount))
         raise ValueError("unknown kind: %s" % kind)
 
     def panel_command(self, cmd):
