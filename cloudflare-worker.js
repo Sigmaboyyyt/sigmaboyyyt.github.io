@@ -61,7 +61,7 @@ function buildCommand(kind, nick, amount, group) {
   if (kind === "tag") return "tag allow " + nick;
   if (kind === "mute") return "unmute " + nick;
   if (kind === "unban") return group === "full" ? "unfullban " + nick : "untban " + nick;
-  if (kind === "case") return "givecase " + nick + " " + amount;
+  if (kind === "case" || kind === "donatcase") return "givecase " + nick + " " + amount;
   if (kind === "seasoncase") return "giveseasoncase " + nick + " " + amount;
   if (kind === "weeklycase") return "giveweeklycase " + nick + " " + amount;
   if (kind === "titlecase") return "givetitlecase " + nick + " " + amount;

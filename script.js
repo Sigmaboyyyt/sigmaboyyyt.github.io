@@ -281,10 +281,30 @@
         }
         if (found) {
             /* Привилегия и тег выдаются один раз - количество не копится. */
-            if (isCase(found)) { found.qty = (found.qty || 1) + (item.qty || 1); }
+            if (isCase(found)) {
+                found.qty = (parseInt(found.qty, 10) || 1) + (parseInt(item.qty, 10) || 1);
+                if (found.qty < 1) { found.qty = 1; }
+                if (found.qty > 999) { found.qty = 999; }
+                var upFound = found.unitPrice || item.unitPrice || 0;
+                if (!upFound && found.price) {
+                    var oldQtyFound = (found.qty - (parseInt(item.qty, 10) || 1)) || 1;
+                    if (oldQtyFound < 1) { oldQtyFound = 1; }
+                    upFound = Math.round((found.price || 0) / oldQtyFound);
+                }
+                found.unitPrice = upFound || 0;
+                found.price = found.unitPrice * found.qty;
+            }
             toast('Уже в корзине: ' + (found.label || ''));
         } else {
-            item.qty = item.qty || 1;
+            item.qty = Math.max(1, Math.min(999, parseInt(item.qty, 10) || 1));
+            if (isCase(item)) {
+                var upNew = item.unitPrice || 0;
+                if (!upNew && item.price) {
+                    upNew = Math.round((item.price || 0) / (item.qty || 1));
+                }
+                item.unitPrice = upNew || 0;
+                item.price = item.unitPrice * item.qty;
+            }
             items.push(item);
             toast('Добавлено в корзину: ' + (item.label || ''));
         }
@@ -306,6 +326,54 @@
          data-group = внутренняя группа (для kind=group)
          data-label = название для показа
          data-price = цена в рублях (необязательно) */
+    function bindCaseQty() {
+        $$('.card .case-qty').forEach(function (inp) {
+            var card = inp.closest('.card');
+            if (!card) { return; }
+            var dec = card.querySelector('.btn-case-dec');
+            var inc = card.querySelector('.btn-case-inc');
+            var pEl = card.querySelector('.case-price');
+            var base = 0;
+            if (pEl && pEl.getAttribute('data-base')) {
+                base = parseInt(pEl.getAttribute('data-base'), 10) || 0;
+            } else {
+                base = parseInt(card.getAttribute('data-price') || '0', 10) || 0;
+                if (pEl) { pEl.setAttribute('data-base', String(base)); }
+            }
+
+            function sync() {
+                var v = parseInt(inp.value || '1', 10) || 1;
+                if (v < 1) { v = 1; }
+                if (v > 999) { v = 999; }
+                inp.value = String(v);
+                if (pEl) {
+                    var totalP = base * v;
+                    pEl.textContent = totalP.toLocaleString('ru-RU') + ' ₽';
+                }
+            }
+
+            if (dec) {
+                dec.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    var v = parseInt(inp.value || '1', 10) || 1;
+                    inp.value = String(v - 1);
+                    sync();
+                });
+            }
+            if (inc) {
+                inc.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    var v = parseInt(inp.value || '1', 10) || 1;
+                    inp.value = String(v + 1);
+                    sync();
+                });
+            }
+            inp.addEventListener('input', sync);
+            inp.addEventListener('change', sync);
+            sync();
+        });
+    }
+
     function bindBuyButtons() {
         $$('.btn-add-cart').forEach(function (btn) {
             var card = btn.closest('.card') || btn;
@@ -314,15 +382,30 @@
                 var kind = (card.getAttribute('data-kind') || 'group').toLowerCase();
                 var group = card.getAttribute('data-group') || 'premium';
                 var label = card.getAttribute('data-label') || '';
-                var price = parseInt(card.getAttribute('data-price') || '0', 10) || 0;
-                var qty = parseInt(card.getAttribute('data-qty') || '1', 10) || 1;
+                var basePrice = parseInt(card.getAttribute('data-price') || '0', 10) || 0;
+                var qty = 1;
+
+                var qtyInput = card.querySelector('.case-qty');
+                if (qtyInput) {
+                    qty = Math.max(1, Math.min(999, parseInt(qtyInput.value || '1', 10) || 1));
+                    qtyInput.value = String(qty);
+                } else {
+                    qty = Math.max(1, Math.min(999, parseInt(card.getAttribute('data-qty') || '1', 10) || 1));
+                }
+
+                var pElCard = card.querySelector('.case-price');
+                if (pElCard && pElCard.getAttribute('data-base')) {
+                    basePrice = parseInt(pElCard.getAttribute('data-base'), 10) || basePrice;
+                }
 
                 if (!label) {
                     label = kind === 'group' ? (GROUP_NAMES[group] || group)
                           : kind === 'tag' ? 'Тег'
                           : (CASE_NAMES[kind] || 'Товар');
                 }
-                addToCart({ kind: kind, group: group, label: label, price: price, qty: qty });
+
+                var price = basePrice * qty;
+                addToCart({ kind: kind, group: group, label: label, price: price, qty: qty, unitPrice: basePrice });
             });
         });
     }
@@ -354,13 +437,30 @@
         listEl.textContent = '';
         var total = 0;
         items.forEach(function (it, idx) {
-            total += (isCase(it) ? (it.qty || 1) : 1) * (it.price || 0);
+            var caseItem = isCase(it);
+            var qty = caseItem ? (parseInt(it.qty, 10) || 1) : 1;
+            if (qty < 1) { qty = 1; }
+            if (qty > 999) { qty = 999; }
+            it.qty = qty;
+
+            var unitPrice = 0;
+            if (typeof it.unitPrice === 'number') {
+                unitPrice = it.unitPrice;
+            } else if (caseItem && qty > 0) {
+                unitPrice = Math.round((it.price || 0) / qty);
+            } else {
+                unitPrice = it.price || 0;
+            }
+            if (unitPrice < 0) { unitPrice = 0; }
+
+            var lineTotal = unitPrice * qty;
+            total += lineTotal;
 
             var row = document.createElement('div');
             row.className = 'cart-item';
 
             var badge = document.createElement('span');
-            badge.className = 'cart-kind ' + (isCase(it) ? 'is-case' : (it.kind === 'tag' ? 'is-tag' : 'is-group'));
+            badge.className = 'cart-kind ' + (caseItem ? 'is-case' : (it.kind === 'tag' ? 'is-tag' : 'is-group'));
             badge.textContent = it.kind === 'group' ? 'Привилегия'
                              : it.kind === 'tag' ? 'Тег'
                              : it.kind === 'unban' ? 'Разбан'
@@ -378,8 +478,11 @@
             var meta = document.createElement('div');
             meta.className = 'cart-item-meta';
             var parts = [];
-            if (isCase(it) && it.qty > 1) { parts.push('в корзине: ' + it.qty + ' шт.'); }
-            if (it.price) { parts.push(it.price.toLocaleString('ru-RU') + ' ₽'); }
+            if (caseItem) {
+                parts.push(unitPrice.toLocaleString('ru-RU') + ' ₽ × ' + qty + ' = ' + lineTotal.toLocaleString('ru-RU') + ' ₽');
+            } else if (it.price) {
+                parts.push(it.price.toLocaleString('ru-RU') + ' ₽');
+            }
             meta.textContent = parts.join(' • ');
             if (!parts.length) { meta.style.display = 'none'; }
             info.appendChild(meta);
@@ -396,6 +499,7 @@
             listEl.appendChild(row);
         });
 
+        saveCart(items);
         if (sumEl) { sumEl.textContent = total.toLocaleString('ru-RU') + ' ₽'; }
         bindPromoVisibility();
     }
@@ -417,7 +521,7 @@
         var qty = document.getElementById('qty');
         if (qty && hasCase && !qtyTouched) {
             var maxQ = items.reduce(function (m, it) {
-                return isCase(it) ? Math.max(m, it.qty || 1) : m;
+                return isCase(it) ? Math.max(m, parseInt(it.qty, 10) || 1) : m;
             }, 1);
             qty.value = maxQ;
         }
@@ -461,7 +565,9 @@
 
         var payload = items.map(function (it) {
             var amount = 1;
-            if (isCase(it)) { amount = qty; }
+            if (isCase(it)) { amount = parseInt(it.qty, 10) || qty || 1; }
+            if (amount < 1) { amount = 1; }
+            if (amount > 999) { amount = 999; }
             return {
                 kind: it.kind,
                 group: it.group || 'premium',
@@ -525,6 +631,7 @@
     initReveal();
     initStagger();
     refreshCartBadge();
+    bindCaseQty();
     bindBuyButtons();
     bindCopyButtons();
     bindFaq();

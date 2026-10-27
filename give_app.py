@@ -269,7 +269,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if group == "full":
                 return "unfullban %s" % nick
             return "untban %s" % nick
-        if kind == "case":
+        if kind == "case" or kind == "donatcase":
             return "givecase %s %d" % (nick, int(amount))
         if kind == "seasoncase":
             return "giveseasoncase %s %d" % (nick, int(amount))
