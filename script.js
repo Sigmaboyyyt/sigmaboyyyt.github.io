@@ -145,17 +145,41 @@
         fx.className = 'bgfx';
         fx.setAttribute('aria-hidden', 'true');
         var i, dots = '';
-        for (i = 0; i < 14; i++) { dots += '<span class="bg-dot"></span>'; }
-        fx.innerHTML = '<i class="bg-orb"></i><i class="bg-orb"></i><i class="bg-orb"></i>' + dots;
+        for (i = 0; i < 18; i++) { dots += '<span class="bg-dot"></span>'; }
+        fx.innerHTML =
+            '<i class="bg-orb"></i><i class="bg-orb"></i><i class="bg-orb"></i>' +
+            '<div class="bg-halloween">' +
+            '<div class="bg-web"></div><div class="bg-web right"></div><div class="bg-web bottom-left"></div><div class="bg-web bottom-right"></div>' +
+            '<div class="bg-moon"></div>' +
+            '<div class="bg-bat"></div><div class="bg-bat"></div><div class="bg-bat"></div>' +
+            '<div class="bg-ghost"></div><div class="bg-ghost"></div>' +
+            '<div class="bg-pumpkin"></div><div class="bg-pumpkin right"></div>' +
+            '<div class="bg-candle"></div><div class="bg-candle right"></div>' +
+            '<div class="bg-fog"></div>' +
+            '<div class="bg-leaves"></div>' +
+            '<div class="bg-light-overlay"></div>' +
+            '</div>' +
+            dots;
         document.body.appendChild(fx);
+        var leaves = fx.querySelector('.bg-leaves');
+        if (leaves) {
+            for (i = 0; i < 14; i++) {
+                var leaf = document.createElement('span');
+                leaf.className = 'bg-leaf';
+                leaf.style.left = (Math.random() * 100).toFixed(2) + '%';
+                leaf.style.animationDelay = (Math.random() * 12).toFixed(2) + 's';
+                leaf.style.animationDuration = (9 + Math.random() * 7).toFixed(2) + 's';
+                leaves.appendChild(leaf);
+            }
+        }
         Array.prototype.forEach.call(fx.querySelectorAll('.bg-dot'), function (d) {
             d.style.left = (Math.random() * 100).toFixed(2) + '%';
             d.style.top = (Math.random() * 100).toFixed(2) + '%';
-            var s = (1.5 + Math.random() * 2.5).toFixed(1) + 'px';
+            var s = (1 + Math.random() * 2.6).toFixed(1) + 'px';
             d.style.width = s;
             d.style.height = s;
-            d.style.animationDelay = (Math.random() * 5).toFixed(1) + 's';
-            d.style.animationDuration = (3 + Math.random() * 5).toFixed(1) + 's';
+            d.style.animationDelay = (Math.random() * 6).toFixed(1) + 's';
+            d.style.animationDuration = (3.5 + Math.random() * 5).toFixed(1) + 's';
         });
     }
 
@@ -282,19 +306,27 @@
         if (found) {
             /* Привилегия и тег выдаются один раз - количество не копится. */
             if (isCase(found)) {
-                found.qty = (parseInt(found.qty, 10) || 1) + (parseInt(item.qty, 10) || 1);
+                var addQty = parseInt(item.qty, 10) || 1;
+                if (addQty < 1) { addQty = 1; }
+                if (addQty > 999) { addQty = 999; }
+                found.qty = (parseInt(found.qty, 10) || 1) + addQty;
                 if (found.qty < 1) { found.qty = 1; }
                 if (found.qty > 999) { found.qty = 999; }
                 var upFound = found.unitPrice || item.unitPrice || 0;
                 if (!upFound && found.price) {
-                    var oldQtyFound = (found.qty - (parseInt(item.qty, 10) || 1)) || 1;
+                    var oldQtyFound = found.qty - addQty;
                     if (oldQtyFound < 1) { oldQtyFound = 1; }
                     upFound = Math.round((found.price || 0) / oldQtyFound);
                 }
+                if (!upFound && item.price && addQty > 0) {
+                    upFound = Math.round((item.price || 0) / addQty);
+                }
                 found.unitPrice = upFound || 0;
                 found.price = found.unitPrice * found.qty;
+                toast('Добавлено в корзину: ' + (found.label || '') + ' (' + found.qty + ' шт.)');
+            } else {
+                toast('Уже в корзине: ' + (found.label || ''));
             }
-            toast('Уже в корзине: ' + (found.label || ''));
         } else {
             item.qty = Math.max(1, Math.min(999, parseInt(item.qty, 10) || 1));
             if (isCase(item)) {
@@ -309,6 +341,9 @@
             toast('Добавлено в корзину: ' + (item.label || ''));
         }
         saveCart(items);
+        if (document.getElementById('cartList')) {
+            try { renderCartPage(); } catch (e) {}
+        }
     }
 
     function removeAt(index) {
@@ -330,8 +365,7 @@
         $$('.card .case-qty').forEach(function (inp) {
             var card = inp.closest('.card');
             if (!card) { return; }
-            var dec = card.querySelector('.btn-case-dec');
-            var inc = card.querySelector('.btn-case-inc');
+            var range = card.querySelector('.case-range');
             var pEl = card.querySelector('.case-price');
             var base = 0;
             if (pEl && pEl.getAttribute('data-base')) {
@@ -346,28 +380,37 @@
                 if (v < 1) { v = 1; }
                 if (v > 999) { v = 999; }
                 inp.value = String(v);
+                if (range) {
+                    var rmax = parseInt(range.max || '64', 10);
+                    if (v > rmax && rmax >= 1) {
+                        range.max = String(v);
+                    }
+                    range.value = String(v);
+                }
                 if (pEl) {
                     var totalP = base * v;
                     pEl.textContent = totalP.toLocaleString('ru-RU') + ' ₽';
                 }
             }
 
-            if (dec) {
-                dec.addEventListener('click', function (e) {
-                    e.preventDefault();
-                    var v = parseInt(inp.value || '1', 10) || 1;
-                    inp.value = String(v - 1);
+            if (range) {
+                var imin = inp.min || '1';
+                var imax = inp.max || '999';
+                range.min = imin;
+                var rdef = Math.min(64, parseInt(imax, 10));
+                if (rdef < parseInt(imin, 10)) { rdef = parseInt(imin, 10); }
+                range.max = String(rdef);
+                range.value = inp.value || imin;
+                range.addEventListener('input', function () {
+                    inp.value = range.value;
+                    sync();
+                });
+                range.addEventListener('change', function () {
+                    inp.value = range.value;
                     sync();
                 });
             }
-            if (inc) {
-                inc.addEventListener('click', function (e) {
-                    e.preventDefault();
-                    var v = parseInt(inp.value || '1', 10) || 1;
-                    inp.value = String(v + 1);
-                    sync();
-                });
-            }
+
             inp.addEventListener('input', sync);
             inp.addEventListener('change', sync);
             sync();
@@ -519,11 +562,17 @@
         if (promoWrap) { promoWrap.style.display = 'block'; }
 
         var qty = document.getElementById('qty');
-        if (qty && hasCase && !qtyTouched) {
-            var maxQ = items.reduce(function (m, it) {
-                return isCase(it) ? Math.max(m, parseInt(it.qty, 10) || 1) : m;
-            }, 1);
-            qty.value = maxQ;
+        var qtyDisp = document.getElementById('qtyDisplay');
+        if (hasCase) {
+            var sumQ = items.reduce(function (s, it) {
+                return s + (isCase(it) ? (parseInt(it.qty, 10) || 1) : 0);
+            }, 0);
+            if (sumQ < 1) { sumQ = 1; }
+            if (qty) { qty.value = sumQ; }
+            if (qtyDisp) { qtyDisp.textContent = sumQ.toLocaleString('ru-RU') + ' шт.'; }
+        } else {
+            if (qty) { qty.value = 1; }
+            if (qtyDisp) { qtyDisp.textContent = '1 шт.'; }
         }
     }
 
@@ -560,12 +609,10 @@
         }
 
         var promo = (form.promo && form.promo.value || '').trim().toUpperCase();
-        var qty = 1;
-        if (form.qty) { qty = Math.max(1, Math.min(999, parseInt(form.qty.value || '1', 10) || 1)); }
 
         var payload = items.map(function (it) {
             var amount = 1;
-            if (isCase(it)) { amount = parseInt(it.qty, 10) || qty || 1; }
+            if (isCase(it)) { amount = parseInt(it.qty, 10) || 1; }
             if (amount < 1) { amount = 1; }
             if (amount > 999) { amount = 999; }
             return {
