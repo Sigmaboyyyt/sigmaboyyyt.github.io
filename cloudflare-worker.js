@@ -25,7 +25,7 @@ const SERVER = "57a7571b";
 const GROUPS = ["premium", "creative", "straj", "lord", "delux", "tsar",
   "imperator", "legenda", "povelitel", "vlastelin", "vladika"];
 
-const KINDS = ["group", "case", "seasoncase", "weeklycase", "titlecase", "moneycase", "tag", "mute", "unban"];
+const KINDS = ["group", "case", "donatcase", "seasoncase", "weeklycase", "titlecase", "moneycase", "tag", "mute", "unban"];
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",

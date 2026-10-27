@@ -21,6 +21,7 @@ KEY = load_key()
 KINDS = {
     "group":      ("setgroup",      True,  False),
     "case":       ("givecase",      False, True),
+    "donatcase":  ("givecase",      False, True),
     "seasoncase": ("giveseasoncase", False, True),
     "weeklycase": ("giveweeklycase", False, True),
     "titlecase":  ("givetitlecase",  False, True),
