@@ -534,8 +534,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             "order_id": order_id,
             "custom": nick,
             "test": "1" if EASYDONATE_TEST_MODE else "0",
-            "success_url": "http://127.0.0.1:9898/pay/success?order_id=" + order_id,
-            "fail_url": "http://127.0.0.1:9898/pay/fail?order_id=" + order_id,
+            "success_url": "https://sigmaboyyyt.github.io/sitee/success.html",
+            "fail_url": "https://sigmaboyyyt.github.io/sitee/fail.html",
             "notification_url": "http://127.0.0.1:9898/pay/callback",
         }
         params["sign"] = self.create_easydonate_sign(params)
