@@ -15,7 +15,7 @@ SERVER = "57a7571b"  # XZNN
 # EasyDonate
 EASYDONATE_PROJECT_ID = "601de418d41ed328e996705ce8cb16dd"
 EASYDONATE_SECRET_KEY = "bcb37da5a3e04fc95ae666a0c78467ca"
-EASYDONATE_FORM_URL = "https://easydonate.ru/api/checkout"
+EASYDONATE_FORM_URL = "https://nenly.easydonate.ru/checkout"
 EASYDONATE_TEST_MODE = True
 
 def load_key():
