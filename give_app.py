@@ -5,11 +5,18 @@
 (в .gitignore — в GitHub не попадёт).
 Адрес: http://127.0.0.1:9898 (админка выдачи — /admin).
 """
-import http.server, json, ssl, urllib.request, urllib.error, os, math, re, mimetypes
-from urllib.parse import quote, unquote
+import http.server, json, ssl, urllib.request, urllib.error, os, math, re, mimetypes, sqlite3, hashlib, time, hmac
+from urllib.parse import quote, unquote, parse_qs
+from datetime import datetime
 
 PANEL = "https://mgr.hosting-minecraft.pro"
 SERVER = "57a7571b"  # XZNN
+
+# EasyDonate
+EASYDONATE_PROJECT_ID = "601de418d41ed328e996705ce8cb16dd"
+EASYDONATE_SECRET_KEY = "bcb37da5a3e04fc95ae666a0c78467ca"
+EASYDONATE_FORM_URL = "https://easydonate.ru/api/checkout"
+EASYDONATE_TEST_MODE = True
 
 def load_key():
     here = os.path.dirname(os.path.abspath(__file__))
@@ -17,6 +24,28 @@ def load_key():
         return f.read().strip()
 
 KEY = load_key()
+
+DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "orders.db")
+
+def init_db():
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    cur.execute("""CREATE TABLE IF NOT EXISTS orders(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        order_id TEXT UNIQUE,
+        nick TEXT,
+        items_json TEXT,
+        promo_code TEXT,
+        amount INTEGER,
+        status TEXT DEFAULT 'pending',
+        issued_at DATETIME,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        webhook_data TEXT
+    )""")
+    conn.commit()
+    conn.close()
+
+init_db()
 
 KINDS = {
     "group":      ("setgroup",      True,  False),
@@ -202,6 +231,27 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def send_redirect(self, location):
+        self.send_response(302)
+        self.send_header("Location", location)
+        self._cors()
+        self.end_headers()
+
+    def read_post_form(self):
+        try:
+            n = int(self.headers.get("Content-Length", 0))
+            raw = self.rfile.read(n).decode("utf-8") if n else ""
+            if "application/x-www-form-urlencoded" in (self.headers.get("Content-Type") or ""):
+                parsed = parse_qs(raw, keep_blank_values=True)
+                return {k: (v[0] if v else "") for k, v in parsed.items()}
+            try:
+                return json.loads(raw)
+            except Exception:
+                parsed = parse_qs(raw, keep_blank_values=True)
+                return {k: (v[0] if v else "") for k, v in parsed.items()}
+        except Exception:
+            return {}
+
     def do_OPTIONS(self):
         self.send_response(204)
         self._cors()
@@ -250,6 +300,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.send_html()
         if path == "/give":
             return self.send_json(200, {"ok": True, "message": "Сервис выдачи работает"})
+        if path in ("/pay/success", "/success"):
+            return self.send_file(os.path.join(os.path.dirname(os.path.abspath(__file__)), "success.html")) if os.path.exists(os.path.join(os.path.dirname(os.path.abspath(__file__)), "success.html")) else self.send_html()
+        if path in ("/pay/fail", "/fail"):
+            return self.send_file(os.path.join(os.path.dirname(os.path.abspath(__file__)), "fail.html")) if os.path.exists(os.path.join(os.path.dirname(os.path.abspath(__file__)), "fail.html")) else self.send_html()
         full = self._resolve_file(self.path)
         if not full:
             return self.send_json(404, {"ok": False, "message": "Не найдено"})
@@ -397,7 +451,173 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return amount + promo_val
         return amount
 
+    def create_easydonate_sign(self, params):
+        keys = sorted([k for k in params.keys() if k not in ("sign", "signature")])
+        s = ":".join(str(params[k]) for k in keys)
+        return hmac.new(EASYDONATE_SECRET_KEY.encode("utf-8"), s.encode("utf-8"), hashlib.md5).hexdigest()
+
+    def handle_pay_create(self):
+        d = self.read_post_form()
+        nick = (d.get("nick") or "").strip()
+        if not nick:
+            return self.send_json(400, {"ok": False, "message": "Укажите ник игрока"})
+        items = d.get("items")
+        if isinstance(items, str):
+            try:
+                items = json.loads(items)
+            except Exception:
+                items = None
+        if not isinstance(items, list) or not items:
+            return self.send_json(400, {"ok": False, "message": "Корзина пуста"})
+
+        norm = []
+        for it in items:
+            if not isinstance(it, dict):
+                continue
+            kind = (it.get("kind") or "case").strip().lower()
+            if kind not in KINDS:
+                return self.send_json(400, {"ok": False, "message": "Неизвестный тип: " + kind})
+            group = (it.get("group") or "premium").strip()
+            if kind == "group" and group not in GROUPS:
+                return self.send_json(400, {"ok": False, "message": "Неизвестная группа: " + group})
+            try:
+                amount = int(it.get("amount") or 1)
+            except Exception:
+                amount = 1
+            amount = max(1, min(999, amount))
+            norm.append({"kind": kind, "group": group, "amount": amount})
+        if not norm:
+            return self.send_json(400, {"ok": False, "message": "Корзина пуста"})
+
+        promo_raw = d.get("promo_code") or d.get("promo") or ""
+        promo_code = promo_raw.strip()
+        promo_kind, promo_val = self.resolve_promo(promo_code) if promo_code else (None, 0)
+        if promo_code and promo_kind is None:
+            return self.send_json(400, {"ok": False, "message": "Промокод не найден или истёк"})
+
+        plan, notes = [], []
+        total_amount = 0
+        for it in norm:
+            final_amount = self.apply_promo(it["kind"], it["amount"], promo_kind, promo_val)
+            if final_amount != it["amount"]:
+                notes.append(it["kind"] + ": " + str(it["amount"]) + " -> " + str(final_amount))
+            try:
+                cmd = self.build_command(it["kind"], nick, final_amount, it["group"])
+            except Exception as e:
+                return self.send_json(400, {"ok": False, "message": "Ошибка: " + str(e)})
+            plan.append((cmd, it, final_amount))
+            price_map = {"premium": 29, "creative": 49, "straj": 79, "lord": 99, "delux": 149, "tsar": 199, "imperator": 399, "legenda": 499, "povelitel": 699, "vlastelin": 999, "vladika": 1999}
+            case_map = {"case": 60, "donatcase": 60, "weeklycase": 99, "seasoncase": 270, "moneycase": 60, "titlecase": 0}
+            if it["kind"] == "group":
+                base = price_map.get(it["group"], 0)
+                total_amount += base
+            elif it["kind"] in case_map:
+                base = case_map.get(it["kind"], 0)
+                total_amount += base * int(final_amount)
+            else:
+                total_amount += 10
+
+        if total_amount <= 0:
+            return self.send_json(400, {"ok": False, "message": "Сумма заказа 0. Титульный кейс сейчас не продаётся"})
+
+        order_id = "NM-" + str(int(time.time())) + "-" + hashlib.md5((nick + str(time.time())).encode()).hexdigest()[:8]
+        conn = sqlite3.connect(DB_PATH)
+        cur = conn.cursor()
+        cur.execute("INSERT INTO orders(order_id,nick,items_json,promo_code,amount,status) VALUES(?,?,?,?,?,?)",
+                    (order_id, nick, json.dumps(plan, ensure_ascii=False), promo_code, total_amount, "pending"))
+        conn.commit()
+        conn.close()
+
+        params = {
+            "shop_id": EASYDONATE_PROJECT_ID,
+            "amount": str(total_amount),
+            "order_id": order_id,
+            "custom": nick,
+            "test": "1" if EASYDONATE_TEST_MODE else "0",
+            "success_url": "http://127.0.0.1:9898/pay/success?order_id=" + order_id,
+            "fail_url": "http://127.0.0.1:9898/pay/fail?order_id=" + order_id,
+        }
+        params["sign"] = self.create_easydonate_sign(params)
+        form_html = "<!DOCTYPE html><html><head><meta charset='utf-8'><title>Оплата...</title></head><body><form id='f' method='post' action='" + EASYDONATE_FORM_URL + "'>"
+        for k, v in params.items():
+            form_html += "<input type='hidden' name='" + k + "' value='" + str(v) + "'>"
+        form_html += "</form><script>document.getElementById('f').submit();</script></body></html>"
+        body = form_html.encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self._cors()
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def issue_order(self, order_id):
+        conn = sqlite3.connect(DB_PATH)
+        cur = conn.cursor()
+        cur.execute("SELECT * FROM orders WHERE order_id=?", (order_id,))
+        row = cur.fetchone()
+        if not row:
+            conn.close()
+            return False
+        status = row[6]
+        if status in ("issued",):
+            conn.close()
+            return True
+        items_json = row[3]
+        try:
+            plan = json.loads(items_json)
+        except Exception:
+            plan = []
+        done, failed = [], []
+        for item in plan:
+            cmd = item[0] if isinstance(item, (list, tuple)) else None
+            if not cmd:
+                continue
+            code, msg = self.panel_command(cmd)
+            if code in (200, 204):
+                done.append(cmd)
+            else:
+                failed.append(cmd)
+        if done and not failed:
+            cur.execute("UPDATE orders SET status='issued', issued_at=? WHERE order_id=?", (datetime.now().isoformat(), order_id))
+            conn.commit()
+            conn.close()
+            return True
+        if done and failed:
+            cur.execute("UPDATE orders SET status='paid' WHERE order_id=?", (order_id,))
+            conn.commit()
+            conn.close()
+            return False
+        cur.execute("UPDATE orders SET status='paid' WHERE order_id=?", (order_id,))
+        conn.commit()
+        conn.close()
+        return False
+
+    def handle_pay_callback(self):
+        d = self.read_post_form()
+        order_id = d.get("order_id") or d.get("merchant_order_id") or d.get("invoice_id")
+        status = (d.get("status") or d.get("payment_status") or "").lower()
+        if order_id and status in ("success", "paid", "ok", "complete", "completed"):
+            conn = sqlite3.connect(DB_PATH)
+            cur = conn.cursor()
+            cur.execute("UPDATE orders SET status='paid', webhook_data=? WHERE order_id=?", (json.dumps(d, ensure_ascii=False), order_id))
+            conn.commit()
+            conn.close()
+            self.issue_order(order_id)
+            return self.send_json(200, {"ok": True})
+        if order_id:
+            conn = sqlite3.connect(DB_PATH)
+            cur = conn.cursor()
+            cur.execute("UPDATE orders SET webhook_data=? WHERE order_id=?", (json.dumps(d, ensure_ascii=False), order_id))
+            conn.commit()
+            conn.close()
+        return self.send_json(200, {"ok": True})
+
     def do_POST(self):
+        path = self.path.split("?", 1)[0]
+        if path in ("/pay/create", "/api/pay/create"):
+            return self.handle_pay_create()
+        if path in ("/pay/callback", "/pay/webhook", "/api/pay/callback"):
+            return self.handle_pay_callback()
         if not self.path.startswith("/give"):
             return self.send_json(404, {"ok": False, "message": "Не найдено"})
         try:

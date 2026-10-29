@@ -608,7 +608,7 @@
             return;
         }
 
-        var promo = (form.promo && form.promo.value || '').trim().toUpperCase();
+        var promo = (form.promo && form.promo.value || '').trim();
 
         var payload = items.map(function (it) {
             var amount = 1;
@@ -622,39 +622,31 @@
             };
         });
 
-        sendToGive(nick, payload, promo, btn);
+        sendToPay(nick, payload, promo, btn);
     }
 
-    function sendToGive(nick, payload, promo, btn) {
-        var url = getApiUrl();
+    function sendToPay(nick, payload, promo, btn) {
+        var url = 'http://127.0.0.1:9898/pay/create';
 
-        if (btn) { btn.disabled = true; btn.textContent = 'Отправляем...'; }
+        if (btn) { btn.disabled = true; btn.textContent = 'Переход к оплате...'; }
 
         fetch(url, {
             method: 'POST',
-            mode: 'cors',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ nick: nick, items: payload, promo_code: promo || '' })
         })
         .then(function (r) {
-            return r.json().catch(function () {
-                throw new Error('Сервис вернул не-JSON (HTTP ' + r.status + ')');
-            });
+            return r.text();
         })
-        .then(function (j) {
-            if (j && j.ok) {
-                showResult('Заказ выполнен! ' + (j.message || ''), true);
-                saveCart([]);
-                renderCartPage();
-            } else {
-                showResult((j && (j.message || j.error)) || 'Не удалось выполнить заказ', false);
-            }
-            if (btn) { btn.disabled = false; btn.textContent = 'Оформить заказ'; }
+        .then(function (html) {
+            document.open();
+            document.write(html);
+            document.close();
         })
         .catch(function (e) {
-            showResult('Не удалось связаться с сервисом выдачи (' + url + '). Убедитесь, что запущен site.bat (или give_app.py отдельно).', false);
+            showResult('Не удалось связаться с сервисом оплаты. Убедитесь, что запущен give_app.py', false);
             if (window.console) { console.error(e); }
-            if (btn) { btn.disabled = false; btn.textContent = 'Оформить заказ'; }
+            if (btn) { btn.disabled = false; btn.textContent = 'Оплатить'; }
         });
     }
 
