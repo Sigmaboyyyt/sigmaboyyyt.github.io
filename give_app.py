@@ -536,6 +536,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             "test": "1" if EASYDONATE_TEST_MODE else "0",
             "success_url": "http://127.0.0.1:9898/pay/success?order_id=" + order_id,
             "fail_url": "http://127.0.0.1:9898/pay/fail?order_id=" + order_id,
+            "notification_url": "http://127.0.0.1:9898/pay/callback",
         }
         params["sign"] = self.create_easydonate_sign(params)
         form_html = "<!DOCTYPE html><html><head><meta charset='utf-8'><title>Оплата...</title></head><body><form id='f' method='post' action='" + EASYDONATE_FORM_URL + "'>"
@@ -616,7 +617,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         path = self.path.split("?", 1)[0]
         if path in ("/pay/create", "/api/pay/create"):
             return self.handle_pay_create()
-        if path in ("/pay/callback", "/pay/webhook", "/api/pay/callback"):
+        if path in ("/pay/callback", "/pay/webhook", "/api/pay/callback", "/callback"):
             return self.handle_pay_callback()
         if not self.path.startswith("/give"):
             return self.send_json(404, {"ok": False, "message": "Не найдено"})
