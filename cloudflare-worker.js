@@ -94,6 +94,16 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
+    if (url.pathname === "/pay/create") {
+      const body = await request.text();
+      const r = await fetch("http://127.0.0.1:9898/pay/create", {
+        method: "POST",
+        headers: { "Content-Type": request.headers.get("Content-Type") || "application/json" },
+        body: body
+      });
+      const html = await r.text();
+      return new Response(html, { status: r.status, headers: Object.assign({ "Content-Type": "text/html; charset=utf-8" }, CORS) });
+    }
     if (url.pathname !== "/give") return json({ ok: false, message: "Не найдено" }, 404);
     if (request.method === "GET") return json({ ok: true, message: "Сервис выдачи работает" });
     if (request.method !== "POST") return json({ ok: false, message: "Метод не поддерживается" }, 405);

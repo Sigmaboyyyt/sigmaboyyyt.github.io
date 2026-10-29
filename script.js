@@ -626,7 +626,9 @@
     }
 
     function sendToPay(nick, payload, promo, btn) {
-        var url = 'http://127.0.0.1:9898/pay/create';
+        var url = (location.protocol === 'file:' || /\.github\.io$/i.test(location.hostname) || /\.pages\.dev$/i.test(location.hostname))
+            ? 'https://nenlymine.vffgeg4.workers.dev/pay/create'
+            : location.origin + '/pay/create';
 
         if (btn) { btn.disabled = true; btn.textContent = 'Переход к оплате...'; }
 
