@@ -5,18 +5,47 @@
 (в .gitignore — в GitHub не попадёт).
 Адрес: http://127.0.0.1:9898 (админка выдачи — /admin).
 """
-import http.server, json, ssl, urllib.request, urllib.error, os, math, re, mimetypes, sqlite3, hashlib, time, hmac
-from urllib.parse import quote, unquote, parse_qs
+import http.server, json, ssl, urllib.request, urllib.error, os, math, re, mimetypes, sqlite3, hashlib, time
+from urllib.parse import quote, unquote, parse_qs, urlencode
 from datetime import datetime
 
 PANEL = "https://mgr.hosting-minecraft.pro"
 SERVER = "57a7571b"  # XZNN
 
-# EasyDonate
-EASYDONATE_PROJECT_ID = "601de418d41ed328e996705ce8cb16dd"
-EASYDONATE_SECRET_KEY = "bcb37da5a3e04fc95ae666a0c78467ca"
-EASYDONATE_FORM_URL = "https://nenly.easydonate.ru/checkout"
-EASYDONATE_TEST_MODE = True
+# TradeMC
+TRADEMC_SHOP = "245601"
+TRADEMC_API = "https://api.trademc.org"
+TRADEMC_PAY = "https://pay.trademc.org"
+
+# Маппинг товаров TradeMC
+TRADEMC_GROUPS = {
+    "premium": 993878,
+    "creative": 993879,
+    "straj": 993880,
+    "lord": 993881,
+    "delux": 993882,
+    "tsar": 993883,
+    "imperator": 993884,
+    "legenda": 993885,
+    "povelitel": 993886,
+    "vlastelin": 993887,
+    "vladika": 993888,
+}
+
+TRADEMC_CASES = {
+    "case": 993889,
+    "donatcase": 993889,
+    "moneycase": 993892,
+    "weeklycase": 993890,
+    "seasoncase": 993891,
+    "titlecase": 993893,
+}
+
+# Разбан через TradeMC
+TRADEMC_UNBAN = {
+    "norm": 993895,
+    "full": 993895,
+}
 
 def load_key():
     here = os.path.dirname(os.path.abspath(__file__))
@@ -451,11 +480,6 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return amount + promo_val
         return amount
 
-    def create_easydonate_sign(self, params):
-        keys = sorted([k for k in params.keys() if k not in ("sign", "signature")])
-        s = ":".join(str(params[k]) for k in keys)
-        return hmac.new(EASYDONATE_SECRET_KEY.encode("utf-8"), s.encode("utf-8"), hashlib.md5).hexdigest()
-
     def handle_pay_create(self):
         d = self.read_post_form()
         nick = (d.get("nick") or "").strip()
@@ -475,7 +499,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if not isinstance(it, dict):
                 continue
             kind = (it.get("kind") or "case").strip().lower()
-            if kind not in KINDS:
+            if kind not in KINDS and kind not in ("unban",):
                 return self.send_json(400, {"ok": False, "message": "Неизвестный тип: " + kind})
             group = (it.get("group") or "premium").strip()
             if kind == "group" and group not in GROUPS:
@@ -495,61 +519,87 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if promo_code and promo_kind is None:
             return self.send_json(400, {"ok": False, "message": "Промокод не найден или истёк"})
 
-        plan, notes = [], []
-        total_amount = 0
+        items_list = []
         for it in norm:
-            final_amount = self.apply_promo(it["kind"], it["amount"], promo_kind, promo_val)
-            if final_amount != it["amount"]:
-                notes.append(it["kind"] + ": " + str(it["amount"]) + " -> " + str(final_amount))
-            try:
-                cmd = self.build_command(it["kind"], nick, final_amount, it["group"])
-            except Exception as e:
-                return self.send_json(400, {"ok": False, "message": "Ошибка: " + str(e)})
-            plan.append((cmd, it, final_amount))
-            price_map = {"premium": 29, "creative": 49, "straj": 79, "lord": 99, "delux": 149, "tsar": 199, "imperator": 399, "legenda": 499, "povelitel": 699, "vlastelin": 999, "vladika": 1999}
-            case_map = {"case": 60, "donatcase": 60, "weeklycase": 99, "seasoncase": 270, "moneycase": 60, "titlecase": 0}
-            if it["kind"] == "group":
-                base = price_map.get(it["group"], 0)
-                total_amount += base
-            elif it["kind"] in case_map:
-                base = case_map.get(it["kind"], 0)
-                total_amount += base * int(final_amount)
+            kind = it["kind"]
+            if kind == "group":
+                gid = it["group"]
+                tid = TRADEMC_GROUPS.get(gid)
+                if not tid:
+                    return self.send_json(400, {"ok": False, "message": "Товар не найден"})
+                items_list.append("%s:1" % tid)
+            elif kind in TRADEMC_CASES:
+                tid = TRADEMC_CASES[kind]
+                final_amount = self.apply_promo(kind, it["amount"], promo_kind, promo_val)
+                items_list.append("%s:%s" % (tid, int(final_amount)))
+            elif kind == "unban":
+                utype = (it.get("group") or "norm").strip().lower()
+                tid = TRADEMC_UNBAN.get(utype, TRADEMC_UNBAN.get("norm"))
+                if not tid:
+                    return self.send_json(400, {"ok": False, "message": "Товар не найден"})
+                items_list.append("%s:1" % tid)
             else:
-                total_amount += 10
+                return self.send_json(400, {"ok": False, "message": "Товар не поддерживается в TradeMC"})
 
-        if total_amount <= 0:
-            return self.send_json(400, {"ok": False, "message": "Сумма заказа 0. Титульный кейс сейчас не продаётся"})
+        if not items_list:
+            return self.send_json(400, {"ok": False, "message": "Корзина пуста"})
 
         order_id = "NM-" + str(int(time.time())) + "-" + hashlib.md5((nick + str(time.time())).encode()).hexdigest()[:8]
         conn = sqlite3.connect(DB_PATH)
         cur = conn.cursor()
         cur.execute("INSERT INTO orders(order_id,nick,items_json,promo_code,amount,status) VALUES(?,?,?,?,?,?)",
-                    (order_id, nick, json.dumps(plan, ensure_ascii=False), promo_code, total_amount, "pending"))
+                    (order_id, nick, json.dumps(norm, ensure_ascii=False), promo_code, 0, "pending"))
         conn.commit()
         conn.close()
 
+        success_url = "https://sigmaboyyyt.github.io/sitee/success.html"
+        fail_url = "https://sigmaboyyyt.github.io/sitee/fail.html"
+        pending_url = "https://sigmaboyyyt.github.io/sitee/success.html"
+
         params = {
-            "shop_id": EASYDONATE_PROJECT_ID,
-            "amount": str(total_amount),
-            "order_id": order_id,
-            "custom": nick,
-            "test": "1" if EASYDONATE_TEST_MODE else "0",
-            "success_url": "https://sigmaboyyyt.github.io/sitee/success.html",
-            "fail_url": "https://sigmaboyyyt.github.io/sitee/fail.html",
-            "notification_url": "http://127.0.0.1:9898/pay/callback",
+            "items": ",".join(items_list),
+            "buyer": nick,
+            "shop": TRADEMC_SHOP,
+            "v": "3",
         }
-        params["sign"] = self.create_easydonate_sign(params)
-        form_html = "<!DOCTYPE html><html><head><meta charset='utf-8'><title>Оплата...</title></head><body><form id='f' method='post' action='" + EASYDONATE_FORM_URL + "'>"
-        for k, v in params.items():
-            form_html += "<input type='hidden' name='" + k + "' value='" + str(v) + "'>"
+        try:
+            ctx = ssl.create_default_context()
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
+            url = TRADEMC_API + "/shop.buyItems?" + urlencode(params)
+            req = urllib.request.Request(url, headers={"Accept": "application/json"})
+            with urllib.request.urlopen(req, context=ctx, timeout=30) as r:
+                body = r.read().decode("utf-8")
+            data = json.loads(body)
+        except Exception as e:
+            return self.send_json(500, {"ok": False, "message": "Ошибка TradeMC: " + str(e)})
+
+        cart_id = None
+        if isinstance(data, dict):
+            resp = data.get("response") or {}
+            cart_id = resp.get("cart_id")
+        if not cart_id:
+            return self.send_json(500, {"ok": False, "message": "Не удалось создать корзину TradeMC"})
+
+        pay_url = "%s?%s" % (TRADEMC_PAY, urlencode({
+            "cart_id": cart_id,
+            "success_url": success_url,
+            "fail_url": fail_url,
+            "pending_url": pending_url,
+        }))
+        form_html = "<!DOCTYPE html><html><head><meta charset='utf-8'><title>Оплата...</title></head><body><form id='f' method='get' action='" + TRADEMC_PAY + "'>"
+        form_html += "<input type='hidden' name='cart_id' value='" + str(cart_id) + "'>"
+        form_html += "<input type='hidden' name='success_url' value='" + success_url + "'>"
+        form_html += "<input type='hidden' name='fail_url' value='" + fail_url + "'>"
+        form_html += "<input type='hidden' name='pending_url' value='" + pending_url + "'>"
         form_html += "</form><script>document.getElementById('f').submit();</script></body></html>"
-        body = form_html.encode("utf-8")
+        body_html = form_html.encode("utf-8")
         self.send_response(200)
         self.send_header("Content-Type", "text/html; charset=utf-8")
         self._cors()
-        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Content-Length", str(len(body_html)))
         self.end_headers()
-        self.wfile.write(body)
+        self.wfile.write(body_html)
 
     def issue_order(self, order_id):
         conn = sqlite3.connect(DB_PATH)
@@ -595,12 +645,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
     def handle_pay_callback(self):
         d = self.read_post_form()
-        order_id = d.get("order_id") or d.get("merchant_order_id") or d.get("invoice_id")
-        status = (d.get("status") or d.get("payment_status") or "").lower()
-        if order_id and status in ("success", "paid", "ok", "complete", "completed"):
+        # TradeMC обычно шлёт через уведомления, но оставим совместимость
+        order_id = d.get("order_id") or d.get("merchant_order_id") or d.get("invoice_id") or d.get("cart_id")
+        status = (d.get("status") or d.get("payment_status") or d.get("state") or "").lower()
+        if order_id and status in ("success", "paid", "ok", "complete", "completed", "done"):
             conn = sqlite3.connect(DB_PATH)
             cur = conn.cursor()
-            cur.execute("UPDATE orders SET status='paid', webhook_data=? WHERE order_id=?", (json.dumps(d, ensure_ascii=False), order_id))
+            cur.execute("UPDATE orders SET status='paid', webhook_data=? WHERE order_id=? OR webhook_data LIKE ?", (json.dumps(d, ensure_ascii=False), order_id, "%" + str(order_id) + "%"))
             conn.commit()
             conn.close()
             self.issue_order(order_id)
@@ -608,7 +659,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if order_id:
             conn = sqlite3.connect(DB_PATH)
             cur = conn.cursor()
-            cur.execute("UPDATE orders SET webhook_data=? WHERE order_id=?", (json.dumps(d, ensure_ascii=False), order_id))
+            cur.execute("UPDATE orders SET webhook_data=? WHERE order_id=? OR webhook_data LIKE ?", (json.dumps(d, ensure_ascii=False), order_id, "%" + str(order_id) + "%"))
             conn.commit()
             conn.close()
         return self.send_json(200, {"ok": True})

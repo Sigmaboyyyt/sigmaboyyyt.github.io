@@ -96,7 +96,7 @@ export default {
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
     if (url.pathname === "/pay/create") {
       const body = await request.text();
-      const r = await fetch("http://127.0.0.1:9898/pay/create", {
+      const r = await fetch("https://entrepreneur-atlas-leaves-january.trycloudflare.com/pay/create", {
         method: "POST",
         headers: { "Content-Type": request.headers.get("Content-Type") || "application/json" },
         body: body
