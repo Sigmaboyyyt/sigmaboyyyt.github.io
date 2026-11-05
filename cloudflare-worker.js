@@ -28,9 +28,11 @@ const TRADEMC_GROUPS = {
 };
 
 const TRADEMC_CASES = {
-  case: 993889, donatcase: 993889, seasoncase: 993890, weeklycase: 993891,
+  case: 993889, donatcase: 993889, seasoncase: 993891, weeklycase: 993890,
   titlecase: 993892, moneycase: 993894
 };
+
+const TRADEMC_TAG = 0; // TODO: укажите ID товара "Тег" из кабинета TradeMC
 
 const TRADEMC_UNBAN = { norm: 993895, full: 993895 };
 
@@ -182,6 +184,9 @@ async function handlePayCreate(request, env) {
       const tid = TRADEMC_UNBAN[utype] || TRADEMC_UNBAN.norm;
       if (!tid) return json({ ok: false, message: "Товар не найден" }, 400);
       itemsList.push(String(tid) + ":1");
+    } else if (it.kind === "tag") {
+      if (!TRADEMC_TAG) return json({ ok: false, message: "Тег не подключен: укажите ID товара в TRADEMC_TAG" }, 400);
+      itemsList.push(String(TRADEMC_TAG) + ":1");
     } else {
       return json({ ok: false, message: "Товар не поддерживается в TradeMC" }, 400);
     }

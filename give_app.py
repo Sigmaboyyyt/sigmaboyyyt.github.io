@@ -36,8 +36,8 @@ TRADEMC_CASES = {
     "case": 993889,
     "donatcase": 993889,
     "moneycase": 993892,
-    "weeklycase": 993890,
-    "seasoncase": 993891,
+    "weeklycase": 993891,
+    "seasoncase": 993890,
     "titlecase": 993893,
 }
 
@@ -46,6 +46,9 @@ TRADEMC_UNBAN = {
     "norm": 993895,
     "full": 993895,
 }
+
+# Тег (ID из кабинета TradeMC)
+TRADEMC_TAG = 0  # TODO: укажите ID товара "Тег"
 
 def load_key():
     here = os.path.dirname(os.path.abspath(__file__))
@@ -538,6 +541,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 if not tid:
                     return self.send_json(400, {"ok": False, "message": "Товар не найден"})
                 items_list.append("%s:1" % tid)
+            elif kind == "tag":
+                if not TRADEMC_TAG:
+                    return self.send_json(400, {"ok": False, "message": "Тег не подключен: укажите TRADEMC_TAG"})
+                items_list.append("%s:1" % TRADEMC_TAG)
             else:
                 return self.send_json(400, {"ok": False, "message": "Товар не поддерживается в TradeMC"})
 
