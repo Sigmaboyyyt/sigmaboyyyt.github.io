@@ -552,9 +552,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
         conn.commit()
         conn.close()
 
-        success_url = "https://sigmaboyyyt.github.io/sitee/success.html"
-        fail_url = "https://sigmaboyyyt.github.io/sitee/fail.html"
-        pending_url = "https://sigmaboyyyt.github.io/sitee/success.html"
+        success_url = "https://sigmaboyyyt.github.io/success.html"
+        fail_url = "https://sigmaboyyyt.github.io/fail.html"
+        pending_url = "https://sigmaboyyyt.github.io/success.html"
 
         params = {
             "items": ",".join(items_list),
