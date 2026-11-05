@@ -57,17 +57,18 @@
     --mc-red: #FF6B6B;
     --mc-dark: #EAF0FA;
 
-    --mc-premium: #62D158;
-    --mc-creative: #F5C451;
-    --mc-sraj: #5EE7E7;
-    --mc-lord: #F0D54F;
-    --mc-delux: #FF8CFF;
-    --mc-tsar: #FFC94D;
-    --mc-imperator: #C77AFF;
-    --mc-legenda: #7CFF9E;
-    --mc-povelitel: #FF6B6B;
-    --mc-vlastelin: #B8C0D0;
-    --mc-vladika: #35E0E0;
+    --mc-premium: #1E7A34;
+    --mc-creative: #B8860B;
+    --mc-sraj: #1E3A8A;
+    --mc-straj: #1E3A8A;
+    --mc-lord: #7CFC00;
+    --mc-delux: #FF4FA3;
+    --mc-tsar: #00C8FF;
+    --mc-imperator: #6CB6FF;
+    --mc-legenda: #FFD400;
+    --mc-povelitel: #FF8A00;
+    --mc-vlastelin: #8B5CF6;
+    --mc-vladika: #E53935;
 
     --radius: 18px;
     color-scheme: dark;
