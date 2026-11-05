@@ -7,3 +7,4 @@ _key.cfg
 __pycache__/
 *.pyc
 _*
+cloudflared*.exe 
