@@ -35,20 +35,20 @@ TRADEMC_GROUPS = {
 TRADEMC_CASES = {
     "case": 993889,
     "donatcase": 993889,
+    "weeklycase": 993890,
+    "seasoncase": 993891,
     "moneycase": 993892,
-    "weeklycase": 993891,
-    "seasoncase": 993890,
-    "titlecase": 993893,
+    "titlecase": 0,
 }
 
 # Разбан через TradeMC
 TRADEMC_UNBAN = {
-    "norm": 993895,
-    "full": 993895,
+    "norm": 993893,
+    "full": 993894,
 }
 
 # Тег (ID из кабинета TradeMC)
-TRADEMC_TAG = 0  # TODO: укажите ID товара "Тег"
+TRADEMC_TAG = 993895
 
 def load_key():
     here = os.path.dirname(os.path.abspath(__file__))

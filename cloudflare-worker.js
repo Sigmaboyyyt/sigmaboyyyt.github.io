@@ -28,13 +28,13 @@ const TRADEMC_GROUPS = {
 };
 
 const TRADEMC_CASES = {
-  case: 993889, donatcase: 993889, seasoncase: 993891, weeklycase: 993890,
-  titlecase: 993892, moneycase: 993894
+  case: 993889, donatcase: 993889, weeklycase: 993890, seasoncase: 993891,
+  moneycase: 993892, titlecase: 0
 };
 
-const TRADEMC_TAG = 0; // TODO: укажите ID товара "Тег" из кабинета TradeMC
+const TRADEMC_TAG = 993895;
 
-const TRADEMC_UNBAN = { norm: 993895, full: 993895 };
+const TRADEMC_UNBAN = { norm: 993893, full: 993894 };
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
