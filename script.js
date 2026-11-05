@@ -14,6 +14,7 @@
     var CART_KEY = 'nenlymine-cart';
     var DEFAULT_API = 'http://127.0.0.1:9898/give';
     var REMOTE_API = 'https://nenlymine.vffgeg4.workers.dev/give';
+    var WORKER_BASE = 'https://nenlymine.vffgeg4.workers.dev';
 
     var CASE_KINDS = { case: 1, donatcase: 1, seasoncase: 1, weeklycase: 1, titlecase: 1, moneycase: 1 };
 
@@ -578,14 +579,10 @@
 
     /* ================= ОТПРАВКА ЗАКАЗА ================= */
     function getApiUrl() {
-        if (location.protocol === 'file:') {
-            return DEFAULT_API;
+        if (/^(localhost|127\.0\.0\.1)$/i.test(location.hostname)) {
+            return location.origin + '/give';
         }
-        if (/\.github\.io$/i.test(location.hostname) ||
-            /\.pages\.dev$/i.test(location.hostname)) {
-            return REMOTE_API || DEFAULT_API;
-        }
-        return location.origin + '/give';
+        return REMOTE_API || (WORKER_BASE + '/give');
     }
 
     function submitOrder(form) {
@@ -626,9 +623,9 @@
     }
 
     function sendToPay(nick, payload, promo, btn) {
-        var url = (location.protocol === 'file:' || /\.github\.io$/i.test(location.hostname) || /\.pages\.dev$/i.test(location.hostname))
-            ? 'https://nenlymine.vffgeg4.workers.dev/pay/create'
-            : location.origin + '/pay/create';
+        var url = /^(localhost|127\.0\.0\.1)$/i.test(location.hostname)
+            ? location.origin + '/pay/create'
+            : WORKER_BASE + '/pay/create';
 
         if (btn) { btn.disabled = true; btn.textContent = 'Переход к оплате...'; }
 
@@ -646,7 +643,7 @@
             document.close();
         })
         .catch(function (e) {
-            showResult('Не удалось связаться с сервисом оплаты. Убедитесь, что запущен give_app.py', false);
+            showResult('Не удалось связаться с сервисом оплаты. Попробуйте позже.', false);
             if (window.console) { console.error(e); }
             if (btn) { btn.disabled = false; btn.textContent = 'Оплатить'; }
         });
